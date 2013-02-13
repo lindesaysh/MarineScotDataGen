@@ -3,21 +3,41 @@
 # change 3
 
 # load data
-load("~/Dropbox/MarineScotland/data/three-phases-of-rodsand.RData")
+#load("~/Dropbox/MarineScotland/data/three-phases-of-rodsand.RData")
+#source('~/Dropbox/MarineScotland/MarineScotDataGen/code/Functions.R')
 
-source('~/Dropbox/MarineScotland/MarineScotDataGen/code/Functions.R')
+load("~/../Dropbox/MarineScotland/data/three-phases-of-rodsand.RData")
+source('~/../Dropbox/MarineScotland/MarineScotDataGen/code/Functions.R')
 
 # fit model
 baseModel<- glm(ducks ~ Depth + phase, family=poisson, data=danish.abc)
+coeffs<- baseModel$coefficients
+coefCIs<- makeCIs(baseModel)
 
 # make sim data and get sim coeffs
-test.simdata<- getSimData(baseModel, nsim=500)
-test.coef<-checkSimCoeff(baseModel, test.simdata)
+nsim=500
+test.simdata<- getSimData(baseModel, nsim)
+#test.coef<-checkSimCoeff(baseModel, test.simdata)
+#test.coef2<-checkSimCoeff2(baseModel, test.simdata)
+
+test.coef.cis<-checkSimCoeff_cis(baseModel, test.simdata)
+#benchmark(checkSimCoeff(baseModel, test.simdata), checkSimCoeff2(baseModel, test.simdata), replications=0)
+
+cicheck<- matrix(NA, nsim, length(baseModel$coefficients))
+for(i in 1:length(baseModel$coefficients)){
+  cicheck[,i]<-checkBetaCIs(baseModel$coefficients[i], test.coef.cis$CIs[i,,])  
+}
+betacicheck<-apply(cicheck,2,sum)/nsim
 
 # make plots of intervals for each coeff
 png(file='results/simplePoiss_betas.png')
 par(mfrow=c(2,2))
 for(i in 1:length(baseModel$coeff)){
-  plotCoeffIntervals(test.coef[,i], baseModel$coeff[i], paste('beta', i-1, sep=''))
+  plotCoeffIntervals(test.coef.cis$simcoeff[,i],c(coeffs[i], coefCIs[i,]), paste('beta', i-1, ': ', betacicheck[i],sep=''))
 }
 dev.off()
+
+
+
+
+
