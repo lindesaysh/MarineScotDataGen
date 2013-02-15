@@ -1,43 +1,57 @@
-# Data generation for marine scotland tender
-# 11/2/13
-# change 3
 
-# load data
-#load("~/Dropbox/MarineScotland/data/three-phases-of-rodsand.RData")
-#source('~/Dropbox/MarineScotland/MarineScotDataGen/code/Functions.R')
+# load data and source functions
+load("~/Dropbox/MarineScotland_LSH/data/three-phases-of-rodsand.RData")
+source('~/Dropbox/MarineScotland_LSH/MarineScotDataGen/code/Functions.R')
 
-load("~/../Dropbox/MarineScotland/data/three-phases-of-rodsand.RData")
-source('~/../Dropbox/MarineScotland/MarineScotDataGen/code/Functions.R')
+load("~/../Dropbox/MarineScotland_LSH/data/three-phases-of-rodsand.RData")
+source('~/../Dropbox/MarineScotland_LSH/MarineScotDataGen/code/Functions.R')
+
+
+data<-danish.abc
+plot(data$X, data$y, pch=20, cex=0.2, asp=1)
+
+# load existing pred grid as it has depth in it?
+grid<- read.csv('../data/PredictionGrid.csv')
+grid2<- data.frame(rbind(cbind(grid$Depth, rep('A', nrow(grid))), cbind(grid$Depth, rep('B', nrow(grid))), cbind(grid$Depth, rep('C', nrow(grid)))))
+names(grid2)<- c('Depth', 'phase')
+class(grid2$Depth)<- 'numeric'
+                                  
 
 # fit model
-baseModel<- glm(ducks ~ Depth + phase, family=poisson, data=danish.abc)
-coeffs<- baseModel$coefficients
-coefCIs<- makeCIs(baseModel)
+baseModel<- glm(ducks ~ Depth + as.factor(phase), family=poisson, data=data)
 
-# make sim data and get sim coeffs
 nsim=500
-test.simdata<- getSimData(baseModel, nsim)
-#test.coef<-checkSimCoeff(baseModel, test.simdata)
-#test.coef2<-checkSimCoeff2(baseModel, test.simdata)
 
-test.coef.cis<-checkSimCoeff_cis(baseModel, test.simdata)
-#benchmark(checkSimCoeff(baseModel, test.simdata), checkSimCoeff2(baseModel, test.simdata), replications=0)
+# generate data 
+preds<- matrix(NA, nrow(grid2), nsim) 
+simData <- matrix(NA, nrow(data), nsim)
+markers = coeff = matrix(NA, nsim, length(baseModel$coefficients))
 
-cicheck<- matrix(NA, nsim, length(baseModel$coefficients))
-for(i in 1:length(baseModel$coefficients)){
-  cicheck[,i]<-checkBetaCIs(baseModel$coefficients[i], test.coef.cis$CIs[i,,])  
+for(i in 1:nsim){
+
+  if((i/10)%%1 == 0 ){cat(i, '\n')}else{cat('.')}
+  
+  dataObj<-wrapperfunc(baseModel, grid2, seed=i)
+
+  simData<- cbind(simData, dataObj$simData)
+  preds<- cbind(preds, dataObj$preds)
+  markers<- rbind(markers, dataObj$betaCheck)
+  coeff<- rbind(coeff, dataObj$fit$coeff)
+  rm(dataObj)
 }
-betacicheck<-apply(cicheck,2,sum)/nsim
 
-# make plots of intervals for each coeff
-png(file='results/simplePoiss_betas.png')
+
+betacicheck<-apply(markers,2,sum)/nsim
+baseMcoefCIs<- makeCIs(baseModel$coef, df=baseModel$df.residual, se=summary(baseModel)$coef[,2])
 par(mfrow=c(2,2))
-for(i in 1:length(baseModel$coeff)){
-  plotCoeffIntervals(test.coef.cis$simcoeff[,i],c(coeffs[i], coefCIs[i,]), paste('beta', i-1, ': ', betacicheck[i],sep=''))
+for(i in 1:ncol(coeff)){
+  plotCoeffIntervals(data=coeff[,i], c(baseModel$coefficients[i], baseMcoefCIs[i,]), paste('beta', i-1, ': ', betacicheck[i],sep=''))
 }
-dev.off()
+ 
+require(fields)
+quilt.plot(grid$longitude, grid$lat, preds[1:nrow(grid),1], asp=1, nrow=100, ncol=100)
+  
 
 
-
-
-
+  
+  
